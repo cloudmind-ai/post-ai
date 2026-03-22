@@ -1,0 +1,16 @@
+{
+  "type": "pages",
+  "name": "aileron",
+  "appDir": ".",
+  "build": "pnpm build",
+  "staging": {
+    "pages": {
+      "project": "aileron-staging"
+    }
+  },
+  "production": {
+    "pages": {
+      "project": "aileron-prod"
+    }
+  }
+}
