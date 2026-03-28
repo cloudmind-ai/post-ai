@@ -1,59 +1,50 @@
 /**
- * PostgreSQL operations via Neon serverless driver
+ * PostgreSQL operations via @g-a-l-a-c-t-i-c/data PostgreSQLAdapter
  *
- * Uses the neon() HTTP driver for serverless-friendly queries.
- * Requires DATABASE_URL env var with the direct Neon connection string.
- * Hyperdrive is NOT used — Neon's HTTP endpoint handles connection pooling.
+ * Uses the platform's PostgreSQLAdapter which wraps the postgres driver.
+ * Connection string comes from Hyperdrive binding for connection pooling.
  */
 
-import { neon } from '@neondatabase/serverless'
+import { PostgreSQLAdapter, sanitizeIdentifier } from '@g-a-l-a-c-t-i-c/data'
 import { ServiceUnavailableError } from '@g-a-l-a-c-t-i-c/errors'
 import type { PostAIBindings } from '../bindings'
 
-export type NeonSQL = ReturnType<typeof neon>
+export { sanitizeIdentifier }
 
-export function getPgClient(env: PostAIBindings): NeonSQL {
-  const url = env.DATABASE_URL
+export function getPgAdapter(env: PostAIBindings): PostgreSQLAdapter {
+  const url = env.HYPERDRIVE?.connectionString
   if (!url) {
-    throw new ServiceUnavailableError('DATABASE_URL not configured.')
+    throw new ServiceUnavailableError('Hyperdrive connection not configured.')
   }
-  return neon(url)
+  return new PostgreSQLAdapter(url)
 }
 
 export async function executeQuery<T = Record<string, unknown>>(
-  sql: NeonSQL,
+  adapter: PostgreSQLAdapter,
   query: string,
   params: unknown[] = [],
 ): Promise<T[]> {
-  const result = await sql.query(query, params)
-  return result as T[]
+  return adapter.query<T>(query, params)
 }
 
 export async function executeQueryOne<T = Record<string, unknown>>(
-  sql: NeonSQL,
+  adapter: PostgreSQLAdapter,
   query: string,
   params: unknown[] = [],
 ): Promise<T | null> {
-  const result = await sql.query(query, params)
-  return (result[0] as T) ?? null
+  return adapter.queryOne<T>(query, params)
 }
 
 export async function executeTransaction(
-  sql: NeonSQL,
+  adapter: PostgreSQLAdapter,
   statements: Array<{ sql: string; params?: unknown[] }>,
 ): Promise<unknown[]> {
-  // Neon HTTP transactions: execute sequentially (each call is its own HTTP request)
-  const results: unknown[] = []
-  for (const stmt of statements) {
-    const result = await sql.query(stmt.sql, stmt.params ?? [])
-    results.push(result)
-  }
-  return results
-}
-
-export function sanitizeIdentifier(name: string): string {
-  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
-    throw new Error(`Invalid identifier: ${name}`)
-  }
-  return name
+  return adapter.transaction(async (tx) => {
+    const results: unknown[] = []
+    for (const stmt of statements) {
+      const result = await tx.query(stmt.sql, stmt.params ?? [])
+      results.push(result)
+    }
+    return results
+  })
 }

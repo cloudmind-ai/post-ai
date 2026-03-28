@@ -1,17 +1,17 @@
 /**
- * Migration runner for PostgreSQL via Neon serverless driver
+ * Migration runner for PostgreSQL via @g-a-l-a-c-t-i-c/data PostgreSQLAdapter
  *
- * Uses the Neon HTTP driver for running migrations against PostgreSQL.
+ * Uses the platform's PostgreSQLAdapter for running migrations against PostgreSQL.
  */
 
-import type { NeonSQL } from './pg'
+import type { PostgreSQLAdapter } from '@g-a-l-a-c-t-i-c/data'
 import type { MigrationDefinition, MigrationStatusResponse } from '../types'
 
 /**
  * Ensure the migrations tracking table exists.
  */
-export async function initMigrationsTable(sql: NeonSQL): Promise<void> {
-  await sql.query(
+export async function initMigrationsTable(adapter: PostgreSQLAdapter): Promise<void> {
+  await adapter.query(
     `CREATE TABLE IF NOT EXISTS _migrations (
       version INTEGER PRIMARY KEY,
       name TEXT NOT NULL,
@@ -24,12 +24,12 @@ export async function initMigrationsTable(sql: NeonSQL): Promise<void> {
  * Apply pending migrations in version order.
  */
 export async function applyMigrations(
-  sql: NeonSQL,
+  adapter: PostgreSQLAdapter,
   migrations: MigrationDefinition[],
 ): Promise<{ applied: number[] }> {
-  await initMigrationsTable(sql)
+  await initMigrationsTable(adapter)
 
-  const appliedRows = await sql.query(`SELECT version FROM _migrations ORDER BY version`) as { version: number }[]
+  const appliedRows = await adapter.query<{ version: number }>(`SELECT version FROM _migrations ORDER BY version`)
   const appliedSet = new Set(appliedRows.map((r) => r.version))
   const sorted = [...migrations].sort((a, b) => a.version - b.version)
   const newlyApplied: number[] = []
@@ -37,8 +37,8 @@ export async function applyMigrations(
   for (const m of sorted) {
     if (appliedSet.has(m.version)) continue
 
-    await sql.query(m.sql)
-    await sql.query(
+    await adapter.query(m.sql)
+    await adapter.query(
       `INSERT INTO _migrations (version, name, applied_at) VALUES ($1, $2, $3)`,
       [m.version, m.name, new Date().toISOString()],
     )
@@ -53,14 +53,14 @@ export async function applyMigrations(
  * Get migration status: which are applied and which are pending.
  */
 export async function getMigrationStatus(
-  sql: NeonSQL,
+  adapter: PostgreSQLAdapter,
   migrations: MigrationDefinition[],
 ): Promise<MigrationStatusResponse> {
-  await initMigrationsTable(sql)
+  await initMigrationsTable(adapter)
 
-  const appliedRows = await sql.query(
+  const appliedRows = await adapter.query<{ version: number; name: string; applied_at: string }>(
     `SELECT version, name, applied_at FROM _migrations ORDER BY version`,
-  ) as { version: number; name: string; applied_at: string }[]
+  )
 
   const appliedVersions = new Set(appliedRows.map((r) => r.version))
   const pending = migrations.filter((m) => !appliedVersions.has(m.version))
