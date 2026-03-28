@@ -11,12 +11,19 @@ import type { PostAIBindings } from '../bindings'
 
 export { sanitizeIdentifier }
 
+let adapter: PostgreSQLAdapter | null = null
+let lastUrl: string | null = null
+
 export function getPgAdapter(env: PostAIBindings): PostgreSQLAdapter {
   const url = env.HYPERDRIVE?.connectionString
   if (!url) {
     throw new ServiceUnavailableError('Hyperdrive connection not configured.')
   }
-  return new PostgreSQLAdapter(url)
+  if (!adapter || lastUrl !== url) {
+    adapter = new PostgreSQLAdapter(url)
+    lastUrl = url
+  }
+  return adapter
 }
 
 export async function executeQuery<T = Record<string, unknown>>(
