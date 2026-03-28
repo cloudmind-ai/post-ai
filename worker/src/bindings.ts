@@ -2,10 +2,7 @@
  * Post AI Cloudflare Worker bindings
  */
 export interface PostAIBindings {
-  /** Direct Neon database URL for HTTP driver (secret binding) */
-  DATABASE_URL: string
-
-  /** Hyperdrive connection to PostgreSQL (kept for future TCP driver migration) */
+  /** Hyperdrive connection to PostgreSQL (used by @g-a-l-a-c-t-i-c/data PostgreSQLAdapter) */
   HYPERDRIVE: Hyperdrive
 
   /** D1 database for audit trail storage */

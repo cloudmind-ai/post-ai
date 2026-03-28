@@ -16,7 +16,14 @@ vi.mock('@g-a-l-a-c-t-i-c/data', () => ({
     queryOne: mockQueryOne,
     transaction: mockTransaction,
   })),
+  D1RelationalStore: vi.fn().mockImplementation(() => ({
+    query: vi.fn().mockResolvedValue([]),
+    queryOne: vi.fn().mockResolvedValue(null),
+    insert: vi.fn().mockResolvedValue({}),
+  })),
   sanitizeIdentifier: vi.fn((name: string) => name),
+  createAuditEntry: vi.fn(),
+  verifyAuditChain: vi.fn(),
 }))
 
 function makeRequest(method: string, path: string, body?: unknown, headers?: Record<string, string>) {

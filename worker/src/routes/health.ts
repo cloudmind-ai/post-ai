@@ -4,7 +4,7 @@
 
 import { Hono } from 'hono'
 import type { PostAIBindings } from '../bindings'
-import { getPgClient } from '../lib/pg'
+import { getPgAdapter } from '../lib/pg'
 
 type Env = { Bindings: PostAIBindings; Variables: { tenantId: string; userId: string } }
 
@@ -14,8 +14,8 @@ healthRoutes.get('/health', async (c) => {
   const pgStatus = { connected: false, error: undefined as string | undefined }
 
   try {
-    const sql = getPgClient(c.env)
-    await sql`SELECT 1 as ok`
+    const adapter = getPgAdapter(c.env)
+    await adapter.query('SELECT 1 as ok')
     pgStatus.connected = true
   } catch (error) {
     pgStatus.error = String(error)

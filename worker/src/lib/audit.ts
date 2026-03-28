@@ -5,7 +5,7 @@
  * Every write operation through Post AI gets an audit record.
  */
 
-import { createAuditEntry, verifyAuditChain } from '@g-a-l-a-c-t-i-c/data'
+import { D1RelationalStore, createAuditEntry, verifyAuditChain } from '@g-a-l-a-c-t-i-c/data'
 import type { AuditEntry } from '@g-a-l-a-c-t-i-c/data'
 import type { AuditEntryRecord, AuditVerifyResult } from '../types'
 
@@ -19,22 +19,21 @@ export interface AuditDeps {
  * Initialize the audit trail table if it does not exist.
  */
 export async function initAuditTable(db: D1Database): Promise<void> {
-  await db
-    .prepare(
-      `CREATE TABLE IF NOT EXISTS _audit_trail (
-        id TEXT PRIMARY KEY,
-        entity_type TEXT NOT NULL,
-        entity_id TEXT NOT NULL,
-        action TEXT NOT NULL,
-        data TEXT NOT NULL,
-        previous_checksum TEXT,
-        checksum TEXT NOT NULL,
-        timestamp TEXT NOT NULL,
-        actor TEXT,
-        tenant_id TEXT NOT NULL
-      )`,
-    )
-    .run()
+  const store = new D1RelationalStore(db)
+  await store.query(
+    `CREATE TABLE IF NOT EXISTS _audit_trail (
+      id TEXT PRIMARY KEY,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      data TEXT NOT NULL,
+      previous_checksum TEXT,
+      checksum TEXT NOT NULL,
+      timestamp TEXT NOT NULL,
+      actor TEXT,
+      tenant_id TEXT NOT NULL
+    )`,
+  )
 }
 
 /**
@@ -47,13 +46,13 @@ export async function recordAudit(
   action: 'INSERT' | 'UPDATE' | 'DELETE',
   data: Record<string, unknown>,
 ): Promise<AuditEntry> {
+  const store = new D1RelationalStore(deps.db)
+
   // Get the last entry to chain checksums
-  const lastRow = await deps.db
-    .prepare(
-      `SELECT checksum FROM _audit_trail WHERE entity_type = ? AND entity_id = ? AND tenant_id = ? ORDER BY timestamp DESC LIMIT 1`,
-    )
-    .bind(entityType, entityId, deps.tenantId)
-    .first<{ checksum: string }>()
+  const lastRow = await store.queryOne<{ checksum: string }>(
+    `SELECT checksum FROM _audit_trail WHERE entity_type = ? AND entity_id = ? AND tenant_id = ? ORDER BY timestamp DESC LIMIT 1`,
+    [entityType, entityId, deps.tenantId],
+  )
 
   const entry = await createAuditEntry({
     id: crypto.randomUUID(),
@@ -65,24 +64,18 @@ export async function recordAudit(
     actor: deps.userId || undefined,
   })
 
-  await deps.db
-    .prepare(
-      `INSERT INTO _audit_trail (id, entity_type, entity_id, action, data, previous_checksum, checksum, timestamp, actor, tenant_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .bind(
-      entry.id,
-      entry.entityType,
-      entry.entityId,
-      entry.action,
-      entry.data,
-      entry.previousChecksum,
-      entry.checksum,
-      entry.timestamp,
-      entry.actor ?? null,
-      deps.tenantId,
-    )
-    .run()
+  await store.insert('_audit_trail', {
+    id: entry.id,
+    entity_type: entry.entityType,
+    entity_id: entry.entityId,
+    action: entry.action,
+    data: entry.data,
+    previous_checksum: entry.previousChecksum,
+    checksum: entry.checksum,
+    timestamp: entry.timestamp,
+    actor: entry.actor ?? null,
+    tenant_id: deps.tenantId,
+  })
 
   return entry
 }
@@ -96,14 +89,11 @@ export async function getAuditHistory(
   entityType: string,
   entityId: string,
 ): Promise<AuditEntryRecord[]> {
-  const result = await db
-    .prepare(
-      `SELECT * FROM _audit_trail WHERE entity_type = ? AND entity_id = ? AND tenant_id = ? ORDER BY timestamp ASC`,
-    )
-    .bind(entityType, entityId, tenantId)
-    .all<AuditEntryRecord>()
-
-  return result.results
+  const store = new D1RelationalStore(db)
+  return store.query<AuditEntryRecord>(
+    `SELECT * FROM _audit_trail WHERE entity_type = ? AND entity_id = ? AND tenant_id = ? ORDER BY timestamp ASC`,
+    [entityType, entityId, tenantId],
+  )
 }
 
 /**

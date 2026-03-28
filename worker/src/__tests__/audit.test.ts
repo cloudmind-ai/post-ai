@@ -5,15 +5,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import app from '../index'
 
-// Mock @g-a-l-a-c-t-i-c/data audit functions
+// Mock @g-a-l-a-c-t-i-c/data audit functions and D1RelationalStore
 const mockCreateAuditEntry = vi.fn()
 const mockVerifyAuditChain = vi.fn()
+const mockD1Query = vi.fn()
+const mockD1QueryOne = vi.fn()
+const mockD1Insert = vi.fn()
 
 vi.mock('@g-a-l-a-c-t-i-c/data', () => ({
   PostgreSQLAdapter: vi.fn().mockImplementation(() => ({
     query: vi.fn(),
     queryOne: vi.fn(),
     transaction: vi.fn(),
+  })),
+  D1RelationalStore: vi.fn().mockImplementation(() => ({
+    query: mockD1Query,
+    queryOne: mockD1QueryOne,
+    insert: mockD1Insert,
   })),
   sanitizeIdentifier: vi.fn((name: string) => name),
   createAuditEntry: (...args: unknown[]) => mockCreateAuditEntry(...args),
@@ -32,24 +40,10 @@ function makeRequest(method: string, path: string, body?: unknown, headers?: Rec
   return new Request(`http://localhost${path}`, init)
 }
 
-function createMockDB() {
-  const mockStmt = {
-    bind: vi.fn().mockReturnThis(),
-    first: vi.fn().mockResolvedValue(null),
-    all: vi.fn().mockResolvedValue({ results: [] }),
-    run: vi.fn().mockResolvedValue({ success: true }),
-  }
-  return {
-    prepare: vi.fn().mockReturnValue(mockStmt),
-    batch: vi.fn().mockResolvedValue([]),
-    _stmt: mockStmt,
-  }
-}
-
 function createMockEnv() {
   return {
     HYPERDRIVE: { connectionString: 'postgresql://localhost:5432/test' },
-    DB: createMockDB(),
+    DB: {},
     CACHE_KV: {},
   }
 }
@@ -60,6 +54,8 @@ describe('Audit Routes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     env = createMockEnv()
+    // Default: initAuditTable query succeeds
+    mockD1Query.mockResolvedValue([])
   })
 
   it('GET /audit/:entityType/:entityId returns audit history', async () => {
@@ -90,8 +86,10 @@ describe('Audit Routes', () => {
       },
     ]
 
-    // First call: init table (run), second call: SELECT audit history (all)
-    env.DB._stmt.all.mockResolvedValueOnce({ results: auditRows })
+    // First call: initAuditTable CREATE TABLE, second call: SELECT audit history
+    mockD1Query
+      .mockResolvedValueOnce([])         // initAuditTable
+      .mockResolvedValueOnce(auditRows)  // getAuditHistory
 
     const req = makeRequest('GET', '/audit/account/acc_1')
     const res = await app.fetch(req, env)
@@ -105,7 +103,9 @@ describe('Audit Routes', () => {
   })
 
   it('GET /audit/:entityType/:entityId returns empty for unknown entity', async () => {
-    env.DB._stmt.all.mockResolvedValueOnce({ results: [] })
+    mockD1Query
+      .mockResolvedValueOnce([])  // initAuditTable
+      .mockResolvedValueOnce([])  // getAuditHistory
 
     const req = makeRequest('GET', '/audit/account/acc_unknown')
     const res = await app.fetch(req, env)
@@ -132,7 +132,9 @@ describe('Audit Routes', () => {
       },
     ]
 
-    env.DB._stmt.all.mockResolvedValueOnce({ results: auditRows })
+    mockD1Query
+      .mockResolvedValueOnce([])         // initAuditTable
+      .mockResolvedValueOnce(auditRows)  // getAuditHistory
     mockVerifyAuditChain.mockResolvedValueOnce({ valid: true })
 
     const req = makeRequest('GET', '/audit/verify/payment/pay_1')
@@ -172,7 +174,9 @@ describe('Audit Routes', () => {
       },
     ]
 
-    env.DB._stmt.all.mockResolvedValueOnce({ results: auditRows })
+    mockD1Query
+      .mockResolvedValueOnce([])         // initAuditTable
+      .mockResolvedValueOnce(auditRows)  // getAuditHistory
     mockVerifyAuditChain.mockResolvedValueOnce({ valid: false, brokenAt: 1 })
 
     const req = makeRequest('GET', '/audit/verify/payment/pay_1')
@@ -186,7 +190,9 @@ describe('Audit Routes', () => {
   })
 
   it('GET /audit/verify returns valid for empty chain', async () => {
-    env.DB._stmt.all.mockResolvedValueOnce({ results: [] })
+    mockD1Query
+      .mockResolvedValueOnce([])  // initAuditTable
+      .mockResolvedValueOnce([])  // getAuditHistory
 
     const req = makeRequest('GET', '/audit/verify/payment/pay_nonexistent')
     const res = await app.fetch(req, env)

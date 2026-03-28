@@ -9,7 +9,7 @@ import { Hono } from 'hono'
 import { validate } from '@g-a-l-a-c-t-i-c/validation'
 import { z } from 'zod'
 import type { PostAIBindings } from '../bindings'
-import { getPgClient, executeTransaction } from '../lib/pg'
+import { getPgAdapter, executeTransaction } from '../lib/pg'
 
 type Env = { Bindings: PostAIBindings; Variables: { tenantId: string; userId: string; validated: unknown } }
 
@@ -29,7 +29,7 @@ const transactionSchema = z.object({
 // POST /transaction - execute array of statements atomically
 transactionRoutes.post('/', validate('json', transactionSchema), async (c) => {
   const { statements } = c.get('validated') as z.infer<typeof transactionSchema>
-  const sql = getPgClient(c.env)
-  const results = await executeTransaction(sql, statements)
+  const adapter = getPgAdapter(c.env)
+  const results = await executeTransaction(adapter, statements)
   return c.json({ data: results, statementCount: statements.length })
 })

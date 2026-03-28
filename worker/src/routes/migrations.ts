@@ -8,7 +8,7 @@ import { Hono } from 'hono'
 import { validate } from '@g-a-l-a-c-t-i-c/validation'
 import { z } from 'zod'
 import type { PostAIBindings } from '../bindings'
-import { getPgClient } from '../lib/pg'
+import { getPgAdapter } from '../lib/pg'
 import { applyMigrations, getMigrationStatus } from '../lib/migrations'
 
 type Env = { Bindings: PostAIBindings; Variables: { tenantId: string; userId: string; validated: unknown } }
@@ -34,17 +34,17 @@ const statusQuerySchema = z.object({
 // POST /migrations/apply - apply pending migrations
 migrationRoutes.post('/apply', validate('json', migrationSchema), async (c) => {
   const { migrations } = c.get('validated') as z.infer<typeof migrationSchema>
-  const sql = getPgClient(c.env)
-  const result = await applyMigrations(sql, migrations)
+  const adapter = getPgAdapter(c.env)
+  const result = await applyMigrations(adapter, migrations)
   return c.json({ data: result })
 })
 
 // GET /migrations/status - list applied + pending
 migrationRoutes.get('/status', async (c) => {
-  const sql = getPgClient(c.env)
+  const adapter = getPgAdapter(c.env)
   // Caller can pass known migrations as JSON query param to see pending
   const migrationsParam = c.req.query('migrations')
   const knownMigrations = migrationsParam ? JSON.parse(migrationsParam) : []
-  const status = await getMigrationStatus(sql, knownMigrations)
+  const status = await getMigrationStatus(adapter, knownMigrations)
   return c.json({ data: status })
 })

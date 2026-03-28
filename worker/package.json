@@ -9,15 +9,15 @@
   },
   "dependencies": {
     "hono": "^4.7.0",
-    "@g-a-l-a-c-t-i-c/errors": "^0.1.0",
-    "@g-a-l-a-c-t-i-c/validation": "^0.1.0",
-    "@g-a-l-a-c-t-i-c/data": "^0.1.0",
+    "@g-a-l-a-c-t-i-c/errors": "file:../../galactic-platform/packages/errors",
+    "@g-a-l-a-c-t-i-c/validation": "file:../../galactic-platform/packages/validation",
+    "@g-a-l-a-c-t-i-c/data": "file:../../galactic-platform/packages/data",
     "zod": "^3.24.0"
   },
   "devDependencies": {
     "typescript": "^5.9.0",
     "vitest": "^3.0.0",
     "@cloudflare/workers-types": "^4.0.0",
-    "@g-a-l-a-c-t-i-c/testing": "^0.1.0"
+    "@g-a-l-a-c-t-i-c/testing": "file:../../galactic-platform/packages/testing"
   }
 }
