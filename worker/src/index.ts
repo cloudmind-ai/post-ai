@@ -17,6 +17,7 @@ import { transactionRoutes } from './routes/transactions'
 import { migrationRoutes } from './routes/migrations'
 import { auditRoutes } from './routes/audit'
 import { healthRoutes } from './routes/health'
+import aiSchemaRoutes from './routes/ai-schema'
 
 const app = new Hono<{ Bindings: PostAIBindings; Variables: { tenantId: string; userId: string } }>()
 
